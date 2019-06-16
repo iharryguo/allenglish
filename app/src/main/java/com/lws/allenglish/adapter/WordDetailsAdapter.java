@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.drawable.AnimationDrawable;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -159,7 +160,10 @@ public class WordDetailsAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             @Override
             public void onBindViewHolder(BaseInfoAdapter.ViewHolder holder, int position) {
                 StringBuilder sb = new StringBuilder();
-                sb.append(mDetailedWord.baseWord.means);
+                if (!TextUtils.isEmpty(mDetailedWord.baseWord.means))
+                    sb.append(mDetailedWord.baseWord.means);
+                else
+                    sb.append("[空]");
                 if (mDetailedWord.baesInfo != null) {
                     String word_er;
                     String word_est;

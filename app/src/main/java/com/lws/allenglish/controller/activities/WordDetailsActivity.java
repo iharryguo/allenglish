@@ -5,6 +5,7 @@ import android.graphics.drawable.AnimationDrawable;
 import android.os.Bundle;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.text.TextUtils;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.ImageView;
@@ -68,13 +69,46 @@ public class WordDetailsActivity extends BaseActivity {
         setContentView(R.layout.activity_word_details);
         ButterKnife.bind(this);
         mPlayAudio = new PlayAudio();
-        mBaseWord = (BaseWord) getIntent().getSerializableExtra(Constants.BASE_INFO);
-        mDetailedWord.baseWord = mBaseWord;
         detailedWordModel = new DetailedWordModelImpl(new CustomOnDetailedWordListener(), mContext);
-        detailedWordModel.setCollectedWord(mBaseWord.word);
-        init();
-        if (!NetWorkUtils.getNetworkTypeName(BaseApplication.getInstance()).equals(NetWorkUtils.NETWORK_TYPE_DISCONNECT)) {
-            detailedWordModel.getDetailedWord(0, mBaseWord.word);
+        dealIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent)
+    {
+        super.onNewIntent(intent);
+        dealIntent(intent);
+    }
+
+    private void dealIntent(Intent intent) {
+        BaseWord baseWord = null;
+        if (intent != null) {
+            String action = intent.getAction();
+            String type = intent.getType();
+            if (Intent.ACTION_SEND.equals(action) && type != null) {
+                if ("text/plain".equals(type)) {
+                    String text = intent.getStringExtra(Intent.EXTRA_TEXT);
+                    if (!TextUtils.isEmpty(text)) {
+                        baseWord = new BaseWord();
+                        baseWord.word = text;
+                    }
+                }
+            }
+            if (baseWord == null)
+            {
+                Object temp = intent.getSerializableExtra(Constants.BASE_INFO);
+                if (temp instanceof BaseWord)
+                    baseWord = (BaseWord) temp;
+            }
+        }
+        if (baseWord != null) {
+            mBaseWord = baseWord;
+            mDetailedWord.baseWord = mBaseWord;
+            detailedWordModel.setCollectedWord(mBaseWord.word);
+            init();
+            if (!NetWorkUtils.getNetworkTypeName(BaseApplication.getInstance()).equals(NetWorkUtils.NETWORK_TYPE_DISCONNECT)) {
+                detailedWordModel.getDetailedWord(0, mBaseWord.word);
+            }
         }
     }
 
@@ -101,8 +135,7 @@ public class WordDetailsActivity extends BaseActivity {
 
     private void initView() {
         mWord.setText(mBaseWord.word);
-        mPhen.setText(new StringBuilder().append("英 ").append(mBaseWord.ph_en));
-        mPham.setText(new StringBuilder().append("美 ").append(mBaseWord.ph_am));
+        updatePronounce();
         mWord.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -196,6 +229,18 @@ public class WordDetailsActivity extends BaseActivity {
         mAdapter.stopAnimation();
     }
 
+    private void updatePronounce() {
+        String pron = "英 ";
+        if (!TextUtils.isEmpty(mBaseWord.ph_en))
+            pron += mBaseWord.ph_en;
+        mPhen.setText(pron);
+
+        pron = "美 ";
+        if (!TextUtils.isEmpty(mBaseWord.ph_am))
+            pron += mBaseWord.ph_am;
+        mPham.setText(pron);
+    }
+
     private class CustomOnDetailedWordListener implements OnDetailedWordListener {
 
         @Override
@@ -207,6 +252,42 @@ public class WordDetailsActivity extends BaseActivity {
             mDetailedWord.iflyNativeAd = detailedWord.iflyNativeAd;
             mDetailedWord.nativeADDataRef = detailedWord.nativeADDataRef;
             mAdapter.notifyDataSetChanged();
+
+            // 用网络数据替代从数据库查询到的离线数据
+            updateOfflineData(detailedWord);
+        }
+
+        private void updateOfflineData(DetailedWord detailedWord) {
+            if (detailedWord.baesInfo != null) {
+                DetailedWord.BaesInfoEntity info = detailedWord.baesInfo;
+                if (info.symbols != null && info.symbols.size() > 0) {
+                    DetailedWord.BaesInfoEntity.SymbolsEntity entity = info.symbols.get(0);
+                    if (entity.parts != null) {
+                        StringBuilder meansB = new StringBuilder();
+                        for (int i = 0; i < entity.parts.size(); i++) {
+                            DetailedWord.BaesInfoEntity.SymbolsEntity.PartsEntity parts = entity.parts.get(i);
+                            meansB.append(parts.part);
+                            StringBuilder meanB = new StringBuilder();
+                            for (int j = 0; j < parts.means.size(); j++) {
+                                meanB.append(parts.means.get(j));
+                                if (j < parts.means.size() - 1)
+                                    meanB.append(", ");
+                            }
+                            meanB.append(";");
+                            if (i < entity.parts.size() - 1)
+                                meanB.append("\n");
+                            meansB.append(meanB.toString());
+                        }
+                        if (meansB.length() > 0)
+                            mBaseWord.means = meansB.toString();
+                    }
+                    if (!TextUtils.isEmpty(entity.ph_am))
+                        mBaseWord.ph_am = entity.ph_am;
+                    if (!TextUtils.isEmpty(entity.ph_en))
+                        mBaseWord.ph_en = entity.ph_en;
+                    updatePronounce();
+                }
+            }
         }
 
         @Override
